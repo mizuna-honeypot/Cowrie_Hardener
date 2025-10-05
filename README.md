@@ -1,4 +1,4 @@
-# Cowrie Hardener 🛡️
+# Cowrie Hardener 🛡️「日本語」
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.x](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/downloads/)
@@ -80,7 +80,9 @@ Cowrieは非常に優れたSSHハニーポットですが、そのデフォル�
 
 このプロジェクトは[MITライセンス](LICENSE)の下で公開されています。
 
-# Cowrie Hardener 🛡️
+
+
+# Cowrie Hardener 🛡️「English」
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.x](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/downloads/)
