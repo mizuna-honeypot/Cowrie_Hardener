@@ -8,32 +8,35 @@ import string
 import sys
 import shutil
 
-# --- Configuration ---
-# Please specify the 'etc' directory according to your Cowrie installation path
+# --- 設定 ---
+# Cowrieのインストールパスに合わせて、etcディレクトリの「絶対パス」を指定してください
+# 例: COWRIE_ETC_PATH = '/home/ubuntu/cowrie/etc/'
 COWRIE_ETC_PATH = 'etc/'
-# List of weak default usernames (root is excluded for special handling)
 WEAK_USERNAMES = ['phil', 'admin', 'user', 'guest', 'test']
 
-# --- Automatic Path Generation ---
+# --- パスの自動生成 ---
 COWRIE_CONFIG_PATH = os.path.join(COWRIE_ETC_PATH, 'cowrie.cfg')
 USERDB_PATH = os.path.join(COWRIE_ETC_PATH, 'userdb.txt')
 HONEYFS_PATH = os.path.abspath(os.path.join(COWRIE_ETC_PATH, '..', 'honeyfs'))
 FAKE_PASSWD_PATH = os.path.join(HONEYFS_PATH, 'etc', 'passwd')
 
-# --- Random Data Generation Functions ---
+# --- ランダムデータ生成関数 ---
 def generate_ssh_banner():
-    versions = ['8.2p1', '8.9p1', '9.2p1', '9.7p1']
-    distros = ['Ubuntu-10ubuntu2.10', 'Debian-10+deb11u1', '']
+    versions = ['8.9p1', '9.2p1', '9.7p1']
+    distros = ['Ubuntu-10ubuntu2.12', 'Debian-10+deb11u2', '']
     return f"SSH-2.0-OpenSSH_{random.choice(versions)} {random.choice(distros)}".strip()
 
 def generate_hostname():
     prefixes = ['web', 'db', 'app', 'srv', 'host', 'dev']
-    domains = ['internal', 'local', 'corp', 'lan']
-    return f"{random.choice(prefixes)}{random.randint(1, 200)}.{random.choice(domains)}"
-    
+    return f"{random.choice(prefixes)}{random.randint(10, 200)}"
+
+def generate_prompt(hostname):
+    user = "admin"
+    return f"{user}@{hostname}:~$"
+
 def generate_kernel_version():
-    bases = ['5.15.0', '6.1.0', '6.6.0']
-    sub_versions = random.randint(50, 150)
+    bases = ['5.15.0', '6.2.0', '6.5.0']
+    sub_versions = random.randint(80, 150)
     return f"{random.choice(bases)}-{sub_versions}-generic"
 
 def generate_random_string(length=16):
@@ -46,146 +49,122 @@ def generate_random_credentials(length=14):
     return username, password
 
 def backup_file(filepath):
-    """Creates a backup of a file. Warns if the file does not exist."""
     if not os.path.exists(filepath):
-        print(f"⚠️  Warning: File not found: {filepath}. Skipping backup.")
+        print(f"⚠️  警告: ファイルが見つかりません: {filepath}。")
         return False
     backup_path = f"{filepath}.bak.{random.randint(1000,9999)}"
     try:
         shutil.copy2(filepath, backup_path)
-        print(f"✅ Backup created successfully: {backup_path}")
+        print(f"✅ バックアップを作成しました: {backup_path}")
         return True
     except Exception as e:
-        print(f"❌ Error creating backup: {e}")
+        print(f"❌ バックアップ作成中にエラーが発生しました: {e}")
         return False
 
-# --- Main Processing Functions ---
+# --- メイン処理関数 ---
 def update_cowrie_cfg():
-    """Updates cowrie.cfg to spoof system information."""
-    print("\n📝 Hardening `cowrie.cfg` settings...")
+    print("\n📝 `cowrie.cfg` の設定を強化します...")
+    
     if not os.path.exists(COWRIE_CONFIG_PATH):
-        print("  -> `cowrie.cfg` not found, skipping process.")
-        return
+        dist_path = os.path.join(COWRIE_ETC_PATH, 'cowrie.cfg.dist')
+        if os.path.exists(dist_path):
+            try:
+                shutil.copy2(dist_path, COWRIE_CONFIG_PATH)
+                print(f"  -> `cowrie.cfg` をテンプレートから作成しました。")
+            except Exception as e:
+                print(f"❌ `cowrie.cfg`の作成に失敗しました: {e}")
+                return
+        else:
+            print("  -> `cowrie.cfg`もテンプレートも見つかりません。スキップします。")
+            return
 
     backup_file(COWRIE_CONFIG_PATH)
     config = configparser.ConfigParser()
     config.read(COWRIE_CONFIG_PATH)
 
+    new_host = generate_hostname()
+    
+    # 【最終改善】[honeypot]セクションのホスト名も偽装する
+    if config.has_section('honeypot'):
+        config.set('honeypot', 'hostname', new_host)
+        print(f"  -> メインホスト名を偽装しました: {new_host}")
+
     if config.has_section('ssh'):
-        config.set('ssh', 'accept_root_password', 'false')
-        print("  -> Disabled special root login (accept_root_password=false).")
+        config.set('ssh', 'accept_root_password', 'true')
+        print("  -> [収集モード] `root`の特別ログインを有効化しました。")
         
-        new_banner = generate_ssh_banner()
-        config.set('ssh', 'version_string', new_banner)
-        print(f"  -> Changed SSH banner to: {new_banner}")
-        
-        new_host = generate_hostname()
+        config.set('ssh', 'version_string', generate_ssh_banner())
+        # SSHのホスト名はメインホスト名と一致させる
         config.set('ssh', 'hostname', new_host)
-        print(f"  -> Changed hostname to: {new_host}")
+        print(f"  -> SSH関連のホスト名も一致させました。")
     
     if not config.has_section('shell'):
         config.add_section('shell')
-        print("  -> [shell] section not found, creating a new one.")
-    new_kernel = generate_kernel_version()
-    config.set('shell', 'kernel_version', new_kernel)
-    print(f"  -> Spoofed kernel version to: {new_kernel}")
+    
+    config.set('shell', 'kernel_version', generate_kernel_version())
+    config.set('shell', 'prompt', generate_prompt(new_host))
+    print("  -> カーネルバージョンとシェルプロンプトを偽装しました。")
 
     if config.has_section('proxy'):
-        random_user = generate_random_string()
-        random_pass = generate_random_string()
-        config.set('proxy', 'backend_user', random_user)
-        config.set('proxy', 'backend_pass', random_pass)
-        print(f"  -> Randomized default proxy credentials.")
+        config.set('proxy', 'backend_user', generate_random_string())
+        config.set('proxy', 'backend_pass', generate_random_string())
+        print(f"  -> プロキシのデフォルト認証情報をランダム化しました。")
 
     with open(COWRIE_CONFIG_PATH, 'w') as f:
         config.write(f)
-    print("  -> Successfully saved changes to `cowrie.cfg`.")
+    print("  -> `cowrie.cfg` への変更を保存しました。")
 
 def update_userdb():
-    """Cleans weak users from userdb.txt, changes the root password, and adds a new random user. Creates the file if it doesn't exist."""
-    print("\n🔑 Cleaning and hardening `userdb.txt`...")
+    print("\n🔑 `userdb.txt` を設定し、`root`でのログインを許可します...")
     lines = []
-    
     if os.path.exists(USERDB_PATH):
-        # If the file exists, back it up and read its content
         backup_file(USERDB_PATH)
-        with open(USERDB_PATH, 'r') as f:
-            lines = f.readlines()
+        with open(USERDB_PATH, 'r') as f: lines = f.readlines()
     else:
-        # If the file doesn't exist, print a message indicating it will be created
-        print(f"  -> `userdb.txt` not found. A new file will be created.")
+        print(f"  -> `userdb.txt`が見つかりません。新しいファイルを作成します。")
 
-    # Create a list excluding weak users and root
-    strong_users = [line for line in lines if line.strip() and line.strip().split(':')[0] not in WEAK_USERNAMES + ['root']]
+    strong_users = [l for l in lines if l.strip() and l.strip().split(':')[0] not in WEAK_USERNAMES + ['root']]
+    if lines: print(f"  -> {len(lines) - len(strong_users)}件の弱い/デフォルトユーザーを削除しました。")
     
-    if lines: # Only display a message if the original file had content
-        print(f"  -> Removed {len(lines) - len(strong_users)} weak/default user(s).")
-
-    # Generate and add a new root password and a new random user
-    _, root_password = generate_random_credentials()
+    strong_users.append("root:x:*\n")
+    print("  -> [収集モード] `root`が任意のパスワードを受け入れるように設定しました。")
+    
     new_username, new_password = generate_random_credentials()
-    
-    strong_users.append(f"root:x:{root_password}\n")
     strong_users.append(f"{new_username}:x:{new_password}\n")
+    print("  -> 現実味を出すために、新しいランダムなユーザーを追加しました。")
     
-    # Write the final list back to the file
-    with open(USERDB_PATH, 'w') as f:
-        f.writelines(strong_users)
-        
-    print("  -> Changed `root` password to a strong, random one.")
-    print("  -> Added a new random user.")
-    return {"root": root_password, "new_user": (new_username, new_password)}
+    with open(USERDB_PATH, 'w') as f: f.writelines(strong_users)
+    return new_username
     
 def update_honeyfs(new_username):
-    """Removes traces of weak users from the fake /etc/passwd in honeyfs."""
-    print("\n📂 Cleaning up the fake file system (`honeyfs`)...")
+    print("\n📂 偽ファイルシステム (`honeyfs`) をクリーンアップします...")
     if not os.path.exists(FAKE_PASSWD_PATH): return
-    if not backup_file(FAKE_PASSWD_PATH): return
-
-    with open(FAKE_PASSWD_PATH, 'r') as f:
-        lines = f.readlines()
-
-    strong_lines = [line for line in lines if line.strip().split(':')[0] not in WEAK_USERNAMES]
-    print("  -> Removed traces of weak users from the fake /etc/passwd.")
-
+    backup_file(FAKE_PASSWD_PATH)
+    with open(FAKE_PASSWD_PATH, 'r') as f: lines = f.readlines()
+    strong_lines = [l for l in lines if l.strip().split(':')[0] not in WEAK_USERNAMES]
     if new_username:
         uid = random.randint(1001, 2000)
         strong_lines.append(f"{new_username}:x:{uid}:{uid}:{new_username},,,:/home/{new_username}:/bin/bash\n")
-        print("  -> Added the new user's entry to the fake /etc/passwd for consistency.")
-
-    with open(FAKE_PASSWD_PATH, 'w') as f:
-        f.writelines(strong_lines)
-    print("  -> Successfully saved changes to the fake /etc/passwd.")
+    with open(FAKE_PASSWD_PATH, 'w') as f: f.writelines(strong_lines)
+    print("  -> 偽/etc/passwdから弱いユーザーの痕跡を削除しました。")
 
 def main():
-    print("🚀 Starting Cowrie Hardening Tool [Auto-Create Edition]...")
+    print("🚀 Cowrie堅牢化ツール【最終・完全版】を開始します...")
     
     update_cowrie_cfg()
-    new_creds = update_userdb()
-    
-    if new_creds and new_creds.get("new_user"):
-        update_honeyfs(new_creds["new_user"][0])
-
-    if new_creds:
-        print("\n" + "="*50)
-        print("✨ New secure login credentials have been generated ✨")
-        print(f"   New password for root: {new_creds['root']}")
-        print(f"   Additional username: {new_creds['new_user'][0]}")
-        print(f"   Password for additional user: {new_creds['new_user'][1]}")
-        print("="*50 + "\n")
+    new_user = update_userdb()
+    update_honeyfs(new_user)
         
-    print("\n🎉 All hardening processes have been completed!")
-    print("🔴【CRITICAL】You must restart the Cowrie service to apply these changes.")
-    print("   Example: sudo systemctl restart cowrie")
+    print("\n🎉 全ての堅牢化処理が完了しました！")
+    print("✨ [収集モード]で設定完了。`root`で任意のパスワードでログイン可能です。")
+    print("🔴【最重要】変更を適用するには、必ずCowrieサービスを再起動してください。")
     
 if __name__ == "__main__":
     if os.geteuid() != 0:
-        print("❌ Error: This script modifies system files and must be run with administrative privileges (sudo).")
+        print("❌ エラー: 管理者権限(sudo)で実行してください。")
         sys.exit(1)
-    
     if not os.path.exists(COWRIE_ETC_PATH):
-         print(f"❌ Error: Configuration directory not found: {COWRIE_ETC_PATH}")
-         print("   Please correct the 'COWRIE_ETC_PATH' variable in the script to point to your Cowrie's 'etc' directory.")
+         print(f"❌ エラー: 設定ディレクトリが見つかりません: {COWRIE_ETC_PATH}")
+         print("   スクリプト内の 'COWRIE_ETC_PATH' を正しい絶対パスに修正してください。")
          sys.exit(1)
-         
     main()

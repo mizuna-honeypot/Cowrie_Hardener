@@ -3,80 +3,81 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.x](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/downloads/)
 
-An automated hardening script to erase the fingerprints of your Cowrie honeypot and evade detection.
+Cowrieハニーポットの「指紋（フィンガープリント）」を自動的に消去し、検知されにくくするための堅牢化（ハーデニング）ツールです。
 
 ---
-## Overview
+## 概要
 
-Cowrie is an excellent SSH honeypot, but its default settings are widely known. Attackers and researchers can easily identify a server as a honeypot by scanning for these Cowrie-specific "fingerprints."
+Cowrieは非常に優れたSSHハニーポットですが、そのデフォルト設定は広く知られています。そのため、攻撃者や研究者は、Cowrie特有の設定（「指紋」）をスキャンすることで、それが本物のシステムではなくハニーポットであることを見抜いてしまいます。
 
-`cowrie_hardener.py` was developed to win the **cat-and-mouse game** against honeypot detection tools. By running this script just once, you can automatically patch Cowrie's known weaknesses and disguise your honeypot as a legitimate server.
+この`cowrie_hardener.py`は、ハニーポット検知ツールとの**「いたちごっこ（Cat and Mouse Game）」**を有利に進めるために開発されました。このスクリプトは、特に**Cowrie初心者**が、**攻撃者のコマンドログを収集しつつ、ハニーポットだと簡単に見抜かれないようにする**という、バランスの取れた運用を目的としています。
 
----
-## Key Features
-
-This tool automatically hardens the following items:
-
-* ✅ **Randomizes SSH Banner**: Replaces the default SSH version string with a more common and realistic one.
-* ✅ **Randomizes Hostname**: Changes the default hostname (e.g., `svr04`) to a random name like `web112.internal`.
-* ✅ **Spoofs Kernel Version**: Disguises the known, outdated kernel version with a more modern version string.
-* ✅ **Eliminates Weak Credentials**: Completely removes default users like `phil:phil` and `admin:admin` from `userdb.txt`.
-* ✅ **Strengthens Root Password**: Keeps the `root` user but sets its password to a strong, random string.
-* ✅ **Disables Backdoor Login**: Disables the special setting (`accept_root_password`) that allows login with `root:root`.
-* ✅ **Neutralizes Proxy Credentials**: Randomizes the default credentials for the separate proxy authentication path.
-* ✅ **Maintains Filesystem Consistency**: Erases traces of default users from the fake `/etc/passwd` file.
+スクリプトを一度実行するだけで、Cowrieの既知の弱点を自動的に修正し、あなたのハニーポットをより本物のサーバーのように偽装します。
 
 ---
-## Prerequisites
+## 主な機能
+
+このツールは、**ログ収集を最優先する「収集モード」**で以下の項目を自動で堅牢化（ハーデニング）します。
+
+* ✅ **攻撃ログの収集を維持**: `root`でのログインを**意図的に許可**し、世界中のボットネットや自動化ツールからの攻撃と、そのコマンドを最大限収集できるようにします。
+* ✅ **SSHバナーのランダム化**: デフォルトのSSHバージョン文字列を、より一般的で現実的なものに置き換えます。
+* ✅ **ホスト名の偽装**: デフォルトのホスト名（`svr04`など）を、`web123`のようなランダムな名前に変更します。`root`でログインした際のプロンプトもこれに追従します。
+* ✅ **カーネルバージョンの偽装**: 既知の古いカーネルバージョンを、よりモダンなバージョン文字列に偽装します。
+* ✅ **シェルプロンプトの偽装**: `root`以外のユーザーでログインした際のプロンプトも、本物らしく見せかけます。
+* ✅ **弱い認証情報の排除**: `root`以外の、`phil:phil`や`admin:admin`のようなデフォルトユーザーを`userdb.txt`から完全に削除します。
+* ✅ **その他の指紋の消去**: `proxy`の認証情報など、他の細かいデフォルト設定もランダム化します。
+
+---
+## 必要なもの
 
 * Python 3.x
-* A running Cowrie honeypot environment.
+* Cowrieハニーポットの稼働環境
 
 ---
-## Usage
+## 使い方
 
-**⚠️ WARNING: This script directly modifies system configuration files. Always create a backup of your entire `etc` directory before running it.**
+**⚠️ 警告: このスクリプトはシステムの設定ファイルを直接書き換えます。実行前に必ず`etc`ディレクトリ全体のバックアップを取得してください。**
 
-1.  **Clone the repository or download the script.**
+1.  **リポジトリをクローンまたはスクリプトをダウンロードします。**
     ```bash
     git clone https://github.com/mizuna-honeypot/cowrie_hardener.git
     cd cowrie_hardener
     ```
 
-2.  **Edit the path in the script.**
-    Open the `cowrie_hardener.py` file and modify the `COWRIE_ETC_PATH` variable at the top to the absolute path of your Cowrie's `etc` directory.
+2.  **スクリプト内のパスを編集します。**
+    `cowrie_hardener.py`ファイルを開き、冒頭にある`COWRIE_ETC_PATH`の値を、あなたの環境のCowrieの`etc`ディレクトリの**絶対パス**に修正してください。
+
+    **修正前:**
     ```python
-    # Example: If Cowrie is installed in /opt/cowrie/
-    COWRIE_ETC_PATH = '/opt/cowrie/etc/'
+    COWRIE_ETC_PATH = 'etc/'
+    ```
+    **修正後 (例):**
+    ```python
+    COWRIE_ETC_PATH = '/home/ubuntu/cowrie/etc/'
     ```
 
-3.  **Run the script with administrative privileges.**
+3.  **管理者権限でスクリプトを実行します。**
     ```bash
     sudo python3 cowrie_hardener.py
     ```
 
-4.  **Restart the Cowrie service.**
-    **【CRITICAL】** You must restart Cowrie to apply the changes.
+4.  **Cowrieサービスを再起動します。**
+    **【最重要】** 変更を適用するには、必ずCowrieを再起動してください。
     ```bash
-    # If using systemd
-    sudo systemctl restart cowrie
+    # 例: Cowrieのスクリプトで直接実行する場合
+    /home/ubuntu/cowrie/bin/cowrie restart
 
-    # Or, if running directly with Cowrie's scripts
-    # /path/to/your/cowrie/bin/cowrie restart
+    # または、Systemdで管理している場合
+    # sudo systemctl restart cowrie
     ```
 
 ---
-## Contributing
+## 注意事項
 
-Bug reports, feature requests, and pull requests are welcome.
-
----
-## Disclaimer
-
-* Use this tool at your own risk. The author is not responsible for any damage.
-* It is strongly recommended to back up your configuration files before execution.
+* このツールは自己責任で使用してください。いかなる損害についても作者は責任を負いません。
+* 実行前に必ず設定ファイルのバックアップを取ることを強く推奨します。
 
 ---
-## License
+## ライセンス
 
-This project is licensed under the [MIT License](LICENSE).
+このプロジェクトは[MITライセンス](LICENSE)の下で公開されています。
